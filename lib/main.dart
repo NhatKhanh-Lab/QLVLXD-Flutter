@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'services/db_service.dart';
+// Uncomment dòng sau khi đã setup Firebase
+import 'services/firebase_service.dart';
 import 'providers/product_provider.dart';
 import 'providers/invoice_provider.dart';
 import 'providers/supplier_provider.dart';
@@ -14,6 +16,10 @@ void main() async {
 
   // Initialize Hive database
   await DatabaseService.init();
+
+  // Initialize Firebase (uncomment sau khi đã setup Firebase)
+  // Xem hướng dẫn trong lib/examples/firebase_usage_guide.dart
+  await FirebaseService.init();
 
   runApp(const MyApp());
 }

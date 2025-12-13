@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1010597562204",
+    "project_id": "qlvlxd-e5fbd",
+    "storage_bucket": "qlvlxd-e5fbd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1010597562204:android:96d2e3a54405aec4d62399",
+        "android_client_info": {
+          "package_name": "com.example.quanlyvlxd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvuiO_Kac0d9UkNtkGj0y1FfUF8lxLNbs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
