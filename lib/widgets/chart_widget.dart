@@ -80,8 +80,7 @@ class InventoryChartWidget extends StatelessWidget {
               children: entries.asMap().entries.map((entry) {
                 final index = entry.key;
                 final categoryEntry = entry.value;
-                final currencyFormat =
-                    NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+                final currencyFormat = NumberFormat.decimalPattern('vi_VN');
 
                 return Row(
                   mainAxisSize: MainAxisSize.min,
@@ -93,7 +92,7 @@ class InventoryChartWidget extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '${categoryEntry.key}: ${currencyFormat.format(categoryEntry.value)}',
+                      '${categoryEntry.key}: ${currencyFormat.format(categoryEntry.value)} VND',
                       style: const TextStyle(fontSize: 12),
                     ),
                   ],
@@ -151,6 +150,27 @@ class SalesChartWidget extends StatelessWidget {
                     enabled: true,
                     touchTooltipData: BarTouchTooltipData(
                       tooltipBgColor: Colors.grey[800]!,
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final value = rod.toY;
+                        return BarTooltipItem(
+                          '${entries[group.x].key}\n',
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: '${NumberFormat.decimalPattern('vi_VN').format(value)} VND',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                   titlesData: FlTitlesData(
@@ -158,17 +178,24 @@ class SalesChartWidget extends StatelessWidget {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
+                        reservedSize: 28,
+                        interval: 1,
                         getTitlesWidget: (value, meta) {
-                          if (value.toInt() < entries.length) {
+                          final i = value.toInt();
+                          if (i < 0 || i >= entries.length) return const SizedBox.shrink();
+
+                          // Chỉ hiện nhãn cách 1 cột để tránh chèn chữ
+                          if (i % 2 == 1) return const SizedBox.shrink();
+
                             return Padding(
                               padding: const EdgeInsets.only(top: 8),
                               child: Text(
-                                entries[value.toInt()].key,
+                              entries[i].key,
                                 style: const TextStyle(fontSize: 10),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               ),
                             );
-                          }
-                          return const Text('');
                         },
                       ),
                     ),
@@ -178,7 +205,7 @@ class SalesChartWidget extends StatelessWidget {
                         reservedSize: 50,
                         getTitlesWidget: (value, meta) {
                           final currencyFormat =
-                              NumberFormat.compactCurrency(locale: 'vi_VN', symbol: '₫');
+                              NumberFormat.compactCurrency(locale: 'vi_VN', symbol: '');
                           return Text(
                             currencyFormat.format(value),
                             style: const TextStyle(fontSize: 10),

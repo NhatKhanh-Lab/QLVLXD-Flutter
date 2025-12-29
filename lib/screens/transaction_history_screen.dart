@@ -31,7 +31,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
 
     return Scaffold(
@@ -106,7 +106,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                         ],
                       ),
                       trailing: Text(
-                        currencyFormat.format(invoice.total),
+                        '${currencyFormat.format(invoice.total)} VND',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.green[700],
@@ -189,7 +189,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen>
                         ],
                       ),
                       trailing: Text(
-                        currencyFormat.format(order.total),
+                        '${currencyFormat.format(order.total)} VND',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.blue[700],

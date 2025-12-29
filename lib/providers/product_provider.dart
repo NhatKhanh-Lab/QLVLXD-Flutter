@@ -92,7 +92,9 @@ class ProductProvider with ChangeNotifier {
     try {
       await DatabaseService.deleteProduct(productId);
       await FirebaseService.deleteProductFromFirebase(productId);
-      await loadProducts();
+      // Xóa sản phẩm khỏi list hiện tại và thông báo thay đổi
+      _products.removeWhere((p) => p.id == productId);
+      notifyListeners();
     } catch (e) {
       debugPrint('Error deleting product: $e');
       rethrow;

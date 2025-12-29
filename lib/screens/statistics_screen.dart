@@ -13,7 +13,7 @@ class StatisticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
     final invoiceProvider = Provider.of<InvoiceProvider>(context);
-    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
 
     // Calculate inventory by category
     final Map<String, double> categoryValues = {};
@@ -72,9 +72,7 @@ class StatisticsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            currencyFormat.format(
-                              DatabaseService.getTotalInventoryValue(),
-                            ),
+                            '${currencyFormat.format(DatabaseService.getTotalInventoryValue())} VND',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -99,9 +97,7 @@ class StatisticsScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            currencyFormat.format(
-                              invoiceProvider.getTodayRevenue(),
-                            ),
+                            '${currencyFormat.format(invoiceProvider.getTodayRevenue())} VND',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -170,7 +166,7 @@ class StatisticsScreen extends StatelessWidget {
                           subtitle: Text('Đã bán: ${productSales.value}'),
                           trailing: product != null
                               ? Text(
-                                  currencyFormat.format(product.price),
+                                  '${currencyFormat.format(product.price)} VND',
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -220,7 +216,7 @@ class StatisticsScreen extends StatelessWidget {
                             '${products.length} sản phẩm | Tồn: $totalQuantity',
                           ),
                           trailing: Text(
-                            currencyFormat.format(totalValue),
+                            '${currencyFormat.format(totalValue)} VND',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.green,
