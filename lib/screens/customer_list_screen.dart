@@ -15,7 +15,7 @@ class CustomerListScreen extends StatefulWidget {
 class _CustomerListScreenState extends State<CustomerListScreen> {
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
 
     return Scaffold(
       appBar: AppBar(
@@ -87,7 +87,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                       ],
                       const SizedBox(height: 4),
                       Text(
-                        'Tổng mua: ${currencyFormat.format(customer.totalPurchases)}',
+                        'Tổng mua: ${currencyFormat.format(customer.totalPurchases)} VND',
                         style: TextStyle(
                           color: Colors.green[700],
                           fontWeight: FontWeight.w500,
@@ -123,7 +123,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
@@ -132,10 +132,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             ),
           );
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Thêm khách hàng'),
-        backgroundColor: Colors.green,
-        foregroundColor: Colors.white,
+        tooltip: 'Thêm khách hàng',
+        child: const Icon(Icons.add),
       ),
     );
   }

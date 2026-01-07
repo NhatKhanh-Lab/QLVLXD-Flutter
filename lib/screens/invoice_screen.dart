@@ -797,88 +797,287 @@ class _ProductSelectionDialog extends StatelessWidget {
     dynamic product,
     Function(dynamic product, int quantity) onProductSelected,
   ) {
-    final quantityController = TextEditingController(text: '1');
+    int quantity = 1;
 
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
         ),
-        title: Text(
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Product Name
+                Text(
           product.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+
+                // Product Info Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Giá: ${NumberFormat.currency(locale: 'vi_VN', symbol: '₫').format(product.price)}',
+                            'Giá:',
               style: TextStyle(
                 color: Colors.grey[700],
                 fontSize: 14,
               ),
+                          ),
+                          Text(
+                            NumberFormat.currency(locale: 'vi_VN', symbol: '₫')
+                                .format(product.price),
+                            style: TextStyle(
+                              color: Colors.blue[900],
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
             ),
             const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
             Text(
-              'Tồn kho: ${product.quantity} ${product.unit}',
+                            'Tồn kho:',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            '${product.quantity} ${product.unit}',
               style: TextStyle(
                 color: Colors.green[700],
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Quantity Selector
+                Text(
+                  'Chọn số lượng',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800],
               ),
             ),
             const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Số lượng',
-                hintText: 'Nhập số lượng',
-                border: OutlineInputBorder(
+
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Decrease Button
+                      IconButton(
+                        onPressed: quantity > 1
+                            ? () {
+                                setState(() {
+                                  quantity--;
+                                });
+                              }
+                            : null,
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: quantity > 1
+                                ? Colors.red[100]
+                                : Colors.grey[300],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.remove,
+                            color: quantity > 1 ? Colors.red[700] : Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+
+                      // Quantity Display
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.numbers),
+                          border: Border.all(color: Colors.blue[200]!),
+                        ),
+                        child: Text(
+                          '$quantity',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue[900],
+                          ),
+                        ),
+                      ),
+
+                      // Increase Button
+                      IconButton(
+                        onPressed: quantity < product.quantity
+                            ? () {
+                                setState(() {
+                                  quantity++;
+                                });
+                              }
+                            : null,
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: quantity < product.quantity
+                                ? Colors.green[100]
+                                : Colors.grey[300],
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.add,
+                            color: quantity < product.quantity
+                                ? Colors.green[700]
+                                : Colors.grey,
+                            size: 20,
+                          ),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
+                ),
+
+                const SizedBox(height: 24),
+
+                // Total Price
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Thành tiền:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[800],
+                        ),
+                      ),
+                      Text(
+                        NumberFormat.currency(locale: 'vi_VN', symbol: '₫')
+                            .format(product.price * quantity),
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Hủy'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: Colors.grey[400]!),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Hủy',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
           ),
-          ElevatedButton(
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
             onPressed: () {
-              final quantity =
-                  int.tryParse(quantityController.text.trim()) ?? 0;
               if (quantity > 0 && quantity <= product.quantity) {
                 // Đóng dialog số lượng trước
                 Navigator.pop(dialogContext);
                 // Sau đó gọi callback để thêm sản phẩm và đóng dialog chọn sản phẩm
                 onProductSelected(product, quantity);
-              } else {
-                ScaffoldMessenger.of(dialogContext).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      quantity <= 0
-                          ? 'Số lượng phải lớn hơn 0'
-                          : 'Số lượng không đủ. Tồn kho: ${product.quantity} ${product.unit}',
-                    ),
-                    backgroundColor: Colors.red,
-                  ),
-                );
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          backgroundColor: Colors.blue[600],
               foregroundColor: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
             ),
-            child: const Text('Thêm'),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.check_circle_outline, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              'Xác nhận',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
           ),
         ],
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

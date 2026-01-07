@@ -122,7 +122,7 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
@@ -131,10 +131,8 @@ class _SupplierListScreenState extends State<SupplierListScreen> {
             ),
           );
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Thêm nhà cung cấp'),
-        backgroundColor: Colors.blue,
-        foregroundColor: Colors.white,
+        tooltip: 'Thêm nhà cung cấp',
+        child: const Icon(Icons.add),
       ),
     );
   }

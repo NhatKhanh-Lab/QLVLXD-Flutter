@@ -12,7 +12,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'vi_VN', symbol: '₫');
+    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
     final dateFormat = DateFormat('dd/MM/yyyy');
 
     return Scaffold(
@@ -130,7 +130,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        currencyFormat.format(order.total),
+                        '${currencyFormat.format(order.total)} VND',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: Colors.blue[700],
@@ -149,7 +149,7 @@ class PurchaseOrderListScreen extends StatelessWidget {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
             context,
@@ -158,10 +158,8 @@ class PurchaseOrderListScreen extends StatelessWidget {
             ),
           );
         },
-        icon: const Icon(Icons.add),
-        label: const Text('Tạo đơn nhập hàng'),
-        backgroundColor: Colors.amber,
-        foregroundColor: Colors.white,
+        tooltip: 'Tạo đơn nhập hàng',
+        child: const Icon(Icons.add),
       ),
     );
   }

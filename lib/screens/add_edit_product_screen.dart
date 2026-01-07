@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 import '../models/product.dart';
 import '../providers/product_provider.dart';
+import '../utils/currency_formatter.dart';
 
 class AddEditProductScreen extends StatefulWidget {
   final Product? product;
@@ -45,7 +47,9 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
     super.initState();
     if (widget.product != null) {
       _nameController.text = widget.product!.name;
-      _priceController.text = widget.product!.price.toString();
+      // Format giá với dấu phân cách hàng nghìn
+      final formatter = NumberFormat.decimalPattern('vi_VN');
+      _priceController.text = formatter.format(widget.product!.price.toInt());
       _quantityController.text = widget.product!.quantity.toString();
       _unitController.text = widget.product!.unit;
       _descriptionController.text = widget.product!.description ?? '';
@@ -54,7 +58,6 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       _selectedCategory = widget.product!.category;
       _imagePath = widget.product!.imagePath;
     } else {
-      _unitController.text = 'kg';
       _lowStockThresholdController.text = '10';
     }
   }
@@ -115,17 +118,50 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
   }
 
   Future<void> _saveProduct() async {
+    print('DEBUG: Save button pressed');
     if (!_formKey.currentState!.validate()) {
+      print('DEBUG: Form validation failed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng kiểm tra lại các trường bắt buộc'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
+    print('DEBUG: Form validation passed');
+    
+    // Hiển thị loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Đang lưu...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
     try {
       final now = DateTime.now();
+      // Loại bỏ dấu phân cách hàng nghìn trước khi parse
+      final priceText = _priceController.text.replaceAll(RegExp(r'[^\d]'), '');
       final product = Product(
         id: widget.product?.id ?? _uuid.v4(),
         name: _nameController.text.trim(),
         category: _selectedCategory,
-        price: double.parse(_priceController.text),
+        price: double.parse(priceText),
         quantity: int.parse(_quantityController.text),
         unit: _unitController.text.trim(),
         imagePath: _imagePath,
@@ -139,29 +175,59 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       );
 
       final provider = Provider.of<ProductProvider>(context, listen: false);
+      
       if (widget.product == null) {
         await provider.addProduct(product);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã thêm sản phẩm')),
-          );
-        }
+        print('DEBUG: Product added successfully');
       } else {
         await provider.updateProduct(product);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã cập nhật sản phẩm')),
-          );
-        }
+        print('DEBUG: Product updated successfully');
       }
 
       if (mounted) {
+        // Đóng loading dialog
         Navigator.pop(context);
+        // Đóng form
+        Navigator.pop(context);
+        
+        // Hiển thị thông báo thành công
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text(widget.product == null 
+                    ? 'Đã thêm sản phẩm thành công' 
+                    : 'Đã cập nhật sản phẩm thành công'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } catch (e) {
+      print('DEBUG: Error saving product: $e');
       if (mounted) {
+        // Đóng loading dialog
+        Navigator.pop(context);
+        
+        // Hiển thị thông báo lỗi
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Lỗi: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
@@ -176,7 +242,12 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: 100, // Thêm padding dưới để nút không bị che
+          ),
           children: [
             // Image
             GestureDetector(
@@ -293,17 +364,30 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             // Price
             TextFormField(
               controller: _priceController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Giá *',
-                border: OutlineInputBorder(),
-                prefixText: '₫ ',
+                border: const OutlineInputBorder(),
+                hintText: '1.000.000',
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    'VND',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
               ),
               keyboardType: TextInputType.number,
+              inputFormatters: [CurrencyInputFormatter()],
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'Vui lòng nhập giá';
                 }
-                if (double.tryParse(value) == null || double.parse(value) < 0) {
+                final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                if (double.tryParse(cleanValue) == null || double.parse(cleanValue) < 0) {
                   return 'Giá không hợp lệ';
                 }
                 return null;
@@ -336,10 +420,21 @@ class _AddEditProductScreenState extends State<AddEditProductScreen> {
             // Unit
             TextFormField(
               controller: _unitController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Đơn vị *',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
                 hintText: 'kg, m, thùng, ...',
+                suffixIcon: Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    'kg',
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                suffixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
