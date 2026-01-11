@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/invoice_item.dart';
+import '../models/customer.dart';
 import '../providers/product_provider.dart';
 import '../providers/invoice_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/customer_provider.dart';
 import '../widgets/invoice_item_widget.dart';
 import '../services/pdf_service.dart';
 
@@ -19,6 +23,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
   final _customerNameController = TextEditingController();
   final _customerPhoneController = TextEditingController();
   final _notesController = TextEditingController();
+  String? _selectedCustomerId; // Store selected customer ID
   double _vatRate = 0.1;
 
   @override
@@ -96,6 +101,63 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     });
   }
 
+  void _selectCustomer(BuildContext context) {
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final customers = customerProvider.customers;
+
+    if (customers.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chưa có khách hàng nào. Vui lòng thêm khách hàng trước.'),
+        ),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Chọn khách hàng'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: customers.length,
+            itemBuilder: (context, index) {
+              final customer = customers[index];
+              return ListTile(
+                leading: CircleAvatar(
+                  child: Text(
+                    customer.name.isNotEmpty ? customer.name[0].toUpperCase() : 'K',
+                  ),
+                ),
+                title: Text(customer.name),
+                subtitle: customer.phone != null
+                    ? Text('SĐT: ${customer.phone}')
+                    : null,
+                onTap: () {
+                  // Auto-fill customer info and store customer ID
+                  setState(() {
+                    _customerNameController.text = customer.name;
+                    _customerPhoneController.text = customer.phone ?? '';
+                    _selectedCustomerId = customer.id; // Store customer ID
+                  });
+                  Navigator.pop(dialogContext);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Hủy'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _editItem(int index) {
     final item = _items[index];
     final productProvider = Provider.of<ProductProvider>(context, listen: false);
@@ -164,9 +226,14 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
       final productProvider =
           Provider.of<ProductProvider>(context, listen: false);
 
+      // Get current user ID
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.currentUser?.id;
+
       // Create invoice
       final invoice = await invoiceProvider.createInvoice(
         items: _items,
+        createdBy: currentUserId, // Track who created this invoice
         vatRate: _vatRate,
         customerName: _customerNameController.text.trim().isEmpty
             ? null
@@ -178,6 +245,12 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
             ? null
             : _notesController.text.trim(),
       );
+
+      // Update customer total purchases if customer was selected
+      if (_selectedCustomerId != null && _selectedCustomerId!.isNotEmpty) {
+        final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+        customerProvider.updateCustomerTotalPurchases(_selectedCustomerId!, invoice.total);
+      }
 
       // Update product quantities
       for (final item in _items) {
@@ -193,6 +266,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
         _customerNameController.clear();
         _customerPhoneController.clear();
         _notesController.clear();
+        _selectedCustomerId = null; // Clear selected customer ID
       });
 
       if (mounted) {
@@ -266,21 +340,41 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                           children: [
                             Icon(Icons.person_outline, color: Colors.blue[700]),
                             const SizedBox(width: 8),
-                            const Text(
-                              'Thông tin khách hàng',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                            const Expanded(
+                              child: Text(
+                                'Thông tin khách hàng',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.search),
+                              tooltip: 'Chọn khách hàng',
+                              onPressed: () => _selectCustomer(context),
                             ),
                           ],
                         ),
                         const SizedBox(height: 16),
                         TextField(
                           controller: _customerNameController,
+                          onChanged: (_) => setState(() {}),
                           decoration: InputDecoration(
                             labelText: 'Tên khách hàng',
                             prefixIcon: const Icon(Icons.person),
+                            suffixIcon: _customerNameController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear),
+                                    onPressed: () {
+                                      setState(() {
+                                        _customerNameController.clear();
+                                        _customerPhoneController.clear();
+                                        _selectedCustomerId = null; // Clear selected customer ID
+                                      });
+                                    },
+                                  )
+                                : null,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),

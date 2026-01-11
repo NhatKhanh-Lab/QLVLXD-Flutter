@@ -5,6 +5,7 @@ import '../models/invoice_item.dart';
 import '../models/supplier.dart';
 import '../models/customer.dart';
 import '../models/purchase_order.dart';
+import '../models/user.dart';
 
 class DatabaseService {
   static const String productBoxName = 'products';
@@ -12,6 +13,7 @@ class DatabaseService {
   static const String supplierBoxName = 'suppliers';
   static const String customerBoxName = 'customers';
   static const String purchaseOrderBoxName = 'purchase_orders';
+  static const String userBoxName = 'users';
 
   static Future<void> init() async {
     await Hive.initFlutter();
@@ -35,6 +37,9 @@ class DatabaseService {
     if (!Hive.isAdapterRegistered(5)) {
       Hive.registerAdapter(PurchaseOrderAdapter());
     }
+    if (!Hive.isAdapterRegistered(6)) {
+      Hive.registerAdapter(UserAdapter());
+    }
 
     // Open boxes
     await Hive.openBox<Product>(productBoxName);
@@ -42,6 +47,29 @@ class DatabaseService {
     await Hive.openBox<Supplier>(supplierBoxName);
     await Hive.openBox<Customer>(customerBoxName);
     await Hive.openBox<PurchaseOrder>(purchaseOrderBoxName);
+    await Hive.openBox<User>(userBoxName);
+
+    // Initialize default admin user if no users exist
+    await _initializeDefaultAdmin();
+  }
+
+  // Initialize default admin user
+  static Future<void> _initializeDefaultAdmin() async {
+    final userBox = Hive.box<User>(userBoxName);
+    if (userBox.isEmpty) {
+      final admin = User(
+        id: 'admin_001',
+        username: 'admin',
+        password: 'admin123', // In production, should be hashed
+        fullName: 'Quản trị viên',
+        email: 'admin@quanlyvlxd.com',
+        role: UserRole.admin,
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await userBox.put(admin.id, admin);
+    }
   }
 
   // Product operations
@@ -259,6 +287,59 @@ class DatabaseService {
     return purchaseOrderBox.values
         .where((order) => order.status == status)
         .toList();
+  }
+
+  // User operations
+  static Box<User> get userBox => Hive.box<User>(userBoxName);
+
+  static Future<void> addUser(User user) async {
+    await userBox.put(user.id, user);
+  }
+
+  static Future<void> updateUser(User user) async {
+    await userBox.put(user.id, user);
+  }
+
+  static Future<void> deleteUser(String userId) async {
+    await userBox.delete(userId);
+  }
+
+  static User? getUser(String userId) {
+    return userBox.get(userId);
+  }
+
+  static List<User> getAllUsers() {
+    return userBox.values.toList();
+  }
+
+  static List<User> getActiveUsers() {
+    return userBox.values.where((user) => user.isActive).toList();
+  }
+
+  static List<User> getUsersByRole(UserRole role) {
+    return userBox.values.where((user) => user.role == role).toList();
+  }
+
+  static User? authenticateUser(String username, String password) {
+    try {
+      final user = userBox.values.firstWhere(
+        (u) => u.username == username && u.password == password,
+        orElse: () => throw Exception('User not found'),
+      );
+      return user;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  static User? getUserByUsername(String username) {
+    try {
+      return userBox.values.firstWhere(
+        (u) => u.username == username,
+      );
+    } catch (e) {
+      return null;
+    }
   }
 }
 

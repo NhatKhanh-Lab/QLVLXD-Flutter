@@ -1,37 +1,50 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/supplier.dart';
-import '../services/db_service.dart';
+import '../services/firestore_service.dart';
 
 class SupplierProvider with ChangeNotifier {
   List<Supplier> _suppliers = [];
   bool _isLoading = false;
+  StreamSubscription<List<Supplier>>? _suppliersSubscription;
 
   List<Supplier> get suppliers => _suppliers;
   bool get isLoading => _isLoading;
 
   SupplierProvider() {
-    loadSuppliers();
+    _loadSuppliers();
   }
 
-  Future<void> loadSuppliers() async {
+  void _loadSuppliers() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      _suppliers = DatabaseService.getAllSuppliers();
-      _suppliers.sort((a, b) => a.name.compareTo(b.name));
-    } catch (e) {
-      debugPrint('Error loading suppliers: $e');
-    }
+    final stream = FirestoreService.getAllSuppliers();
 
-    _isLoading = false;
-    notifyListeners();
+    _suppliersSubscription = stream.listen(
+      (suppliers) {
+        _suppliers = suppliers;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error loading suppliers from Firestore: $error');
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _suppliersSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> addSupplier(Supplier supplier) async {
     try {
-      await DatabaseService.addSupplier(supplier);
-      await loadSuppliers();
+      await FirestoreService.addSupplier(supplier);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error adding supplier: $e');
       rethrow;
@@ -40,8 +53,8 @@ class SupplierProvider with ChangeNotifier {
 
   Future<void> updateSupplier(Supplier supplier) async {
     try {
-      await DatabaseService.updateSupplier(supplier);
-      await loadSuppliers();
+      await FirestoreService.updateSupplier(supplier);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error updating supplier: $e');
       rethrow;
@@ -50,8 +63,8 @@ class SupplierProvider with ChangeNotifier {
 
   Future<void> deleteSupplier(String supplierId) async {
     try {
-      await DatabaseService.deleteSupplier(supplierId);
-      await loadSuppliers();
+      await FirestoreService.deleteSupplier(supplierId);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error deleting supplier: $e');
       rethrow;

@@ -35,6 +35,9 @@ class Invoice extends HiveObject {
   @HiveField(9)
   String? notes;
 
+  @HiveField(10)
+  String? createdBy; // User ID who created this invoice
+
   Invoice({
     required this.id,
     required this.invoiceNumber,
@@ -46,6 +49,7 @@ class Invoice extends HiveObject {
     this.customerPhone,
     required this.createdAt,
     this.notes,
+    this.createdBy,
   });
 
   Invoice copyWith({
@@ -59,6 +63,7 @@ class Invoice extends HiveObject {
     String? customerPhone,
     DateTime? createdAt,
     String? notes,
+    String? createdBy,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -71,6 +76,7 @@ class Invoice extends HiveObject {
       customerPhone: customerPhone ?? this.customerPhone,
       createdAt: createdAt ?? this.createdAt,
       notes: notes ?? this.notes,
+      createdBy: createdBy ?? this.createdBy,
     );
   }
 
@@ -84,12 +90,29 @@ class Invoice extends HiveObject {
       'total': total,
       'customerName': customerName,
       'customerPhone': customerPhone,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt, // Firestore will convert DateTime to Timestamp automatically
       'notes': notes,
+      'createdBy': createdBy,
     };
   }
 
   factory Invoice.fromMap(Map<String, dynamic> map) {
+    // Handle both Timestamp (from Firestore) and String (from old data) formats
+    DateTime createdAt;
+    if (map['createdAt'] is DateTime) {
+      createdAt = map['createdAt'] as DateTime;
+    } else if (map['createdAt'] is String) {
+      createdAt = DateTime.parse(map['createdAt'] as String);
+    } else {
+      // Handle Firestore Timestamp
+      final timestamp = map['createdAt'];
+      if (timestamp != null) {
+        createdAt = (timestamp as dynamic).toDate();
+      } else {
+        createdAt = DateTime.now();
+      }
+    }
+    
     return Invoice(
       id: map['id'] as String,
       invoiceNumber: map['invoiceNumber'] as String,
@@ -101,8 +124,9 @@ class Invoice extends HiveObject {
       total: (map['total'] as num).toDouble(),
       customerName: map['customerName'] as String?,
       customerPhone: map['customerPhone'] as String?,
-      createdAt: DateTime.parse(map['createdAt'] as String),
+      createdAt: createdAt,
       notes: map['notes'] as String?,
+      createdBy: map['createdBy'] as String?,
     );
   }
 }

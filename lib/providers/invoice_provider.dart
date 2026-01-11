@@ -1,53 +1,83 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/invoice.dart';
 import '../models/invoice_item.dart';
-import '../services/db_service.dart';
-import '../services/firebase_service.dart';
+import '../services/firestore_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 
+/// InvoiceProvider using Firestore - replaces Hive completely
+/// 
+/// **Key differences from Hive:**
+/// - Uses Firestore streams for real-time updates
+/// - Automatically filters invoices by user role (employee sees only their invoices)
+/// - Data automatically syncs across all devices
 class InvoiceProvider with ChangeNotifier {
   List<Invoice> _invoices = [];
   bool _isLoading = false;
   final _uuid = const Uuid();
+  StreamSubscription<List<Invoice>>? _invoicesSubscription;
 
   List<Invoice> get invoices => _invoices;
   bool get isLoading => _isLoading;
 
   InvoiceProvider() {
-    loadInvoices();
+    _initInvoicesStream();
   }
 
-  Future<void> loadInvoices({bool syncFromFirebase = true}) async {
+  /// Initialize Firestore stream - automatically updates when data changes
+  void _initInvoicesStream() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      // Fetch from Firebase first (if enabled)
-      if (syncFromFirebase) {
-        try {
-          final firebaseInvoices = await FirebaseService.fetchInvoicesFromFirebase();
-          if (firebaseInvoices.isNotEmpty) {
-            debugPrint('Fetched ${firebaseInvoices.length} invoices from Firebase');
-            // Merge Firebase data into local database
-            for (final invoice in firebaseInvoices) {
-              await DatabaseService.addInvoice(invoice);
-            }
-          }
-        } catch (e) {
-          debugPrint('Firebase sync skipped (app continues with local data): $e');
-        }
-      }
+    // Listen to Firestore stream - automatically updates UI when data changes
+    // Note: We'll need to pass AuthProvider context to filter by user
+    _invoicesSubscription = FirestoreService.getAllInvoices().listen(
+      (invoices) {
+        _invoices = invoices;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error loading invoices from Firestore: $error');
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
 
-      // Load from local database (includes synced Firebase data)
-      _invoices = DatabaseService.getAllInvoices();
-      _invoices.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    } catch (e) {
-      debugPrint('Error loading invoices: $e');
-    }
+  /// Update stream based on current user (for role-based filtering)
+  void updateStreamForUser(String? userId, bool isAdmin) {
+    _invoicesSubscription?.cancel();
 
-    _isLoading = false;
+    _isLoading = true;
     notifyListeners();
+
+    // If employee, only show their invoices. If admin, show all
+    final stream = isAdmin
+        ? FirestoreService.getAllInvoices()
+        : (userId != null
+            ? FirestoreService.getInvoicesByUser(userId)
+            : FirestoreService.getAllInvoices());
+
+    _invoicesSubscription = stream.listen(
+      (invoices) {
+        _invoices = invoices;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error loading invoices from Firestore: $error');
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _invoicesSubscription?.cancel();
+    super.dispose();
   }
 
   String _generateInvoiceNumber() {
@@ -63,6 +93,7 @@ class InvoiceProvider with ChangeNotifier {
 
   Future<Invoice> createInvoice({
     required List<InvoiceItem> items,
+    required String? createdBy, // User ID who creates this invoice
     double vatRate = 0.1,
     String? customerName,
     String? customerPhone,
@@ -83,12 +114,13 @@ class InvoiceProvider with ChangeNotifier {
       customerPhone: customerPhone,
       createdAt: DateTime.now(),
       notes: notes,
+      createdBy: createdBy, // Track who created this invoice
     );
 
     try {
-      await DatabaseService.addInvoice(invoice);
-      await FirebaseService.syncInvoiceToFirebase(invoice);
-      await loadInvoices();
+      // Add to Firestore - automatically syncs to all devices
+      await FirestoreService.addInvoice(invoice);
+      // No need to reload - stream will automatically update
       return invoice;
     } catch (e) {
       debugPrint('Error creating invoice: $e');
@@ -98,28 +130,98 @@ class InvoiceProvider with ChangeNotifier {
 
   Future<void> deleteInvoice(String invoiceId) async {
     try {
-      await DatabaseService.deleteInvoice(invoiceId);
-      await loadInvoices();
+      // Delete from Firestore - automatically syncs to all devices
+      await FirestoreService.deleteInvoice(invoiceId);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error deleting invoice: $e');
       rethrow;
     }
   }
 
-  List<Invoice> getInvoicesByDateRange(DateTime start, DateTime end) {
-    return DatabaseService.getInvoicesByDateRange(start, end);
+  Future<List<Invoice>> getInvoicesByDateRange(DateTime start, DateTime end) async {
+    // Wait a bit for invoices to load if they're still loading
+    int retries = 0;
+    while (_isLoading && retries < 10) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      retries++;
+    }
+    
+    // Filter from already loaded invoices (respects user role filtering)
+    // This ensures consistency with what user sees in invoice screen
+    // Use >= and < for proper date range filtering
+    final filtered = _invoices.where((invoice) {
+      final createdAt = invoice.createdAt;
+      return (createdAt.isAfter(start) || createdAt.isAtSameMomentAs(start)) &&
+             createdAt.isBefore(end);
+    }).toList();
+    
+    debugPrint('getInvoicesByDateRange: Found ${filtered.length} invoices between ${start.toIso8601String()} and ${end.toIso8601String()}');
+    debugPrint('Total invoices in memory: ${_invoices.length}');
+    if (_invoices.isEmpty) {
+      debugPrint('WARNING: No invoices loaded yet! Statistics may be incorrect.');
+    } else {
+      // Debug: show sample invoice dates
+      debugPrint('Sample invoice dates:');
+      for (var inv in _invoices.take(3)) {
+        debugPrint('  - ${inv.invoiceNumber}: ${inv.createdAt.toIso8601String()}, total: ${inv.total}');
+      }
+    }
+    
+    return filtered;
   }
 
-  double getTodayRevenue() {
-    return DatabaseService.getTodayRevenue();
+  Future<double> getTodayRevenue() async {
+    // Wait a bit for invoices to load if they're still loading
+    int retries = 0;
+    while (_isLoading && retries < 10) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      retries++;
+    }
+    
+    // Calculate from already loaded invoices (respects user role filtering)
+    final today = DateTime.now();
+    final startOfDay = DateTime(today.year, today.month, today.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1));
+    
+    debugPrint('getTodayRevenue: Filtering invoices from ${startOfDay.toIso8601String()} to ${endOfDay.toIso8601String()}');
+    
+    final todayInvoices = _invoices.where((invoice) {
+      final createdAt = invoice.createdAt;
+      return (createdAt.isAfter(startOfDay) || createdAt.isAtSameMomentAs(startOfDay)) &&
+             createdAt.isBefore(endOfDay);
+    }).toList();
+    
+    final revenue = todayInvoices.fold(0.0, (sum, invoice) => sum + invoice.total);
+    
+    debugPrint('getTodayRevenue: Found ${todayInvoices.length} invoices today, revenue: $revenue');
+    debugPrint('Total invoices in memory: ${_invoices.length}');
+    if (_invoices.isEmpty) {
+      debugPrint('WARNING: No invoices loaded yet! Statistics may be incorrect.');
+    } else {
+      // Debug: show today's invoices
+      if (todayInvoices.isNotEmpty) {
+        debugPrint('Today\'s invoices:');
+        for (var inv in todayInvoices) {
+          debugPrint('  - ${inv.invoiceNumber}: ${inv.createdAt.toIso8601String()}, total: ${inv.total}');
+        }
+      } else {
+        debugPrint('No invoices found for today. Sample invoice dates:');
+        for (var inv in _invoices.take(5)) {
+          debugPrint('  - ${inv.invoiceNumber}: ${inv.createdAt.toIso8601String()}, total: ${inv.total}');
+        }
+      }
+    }
+    
+    return revenue;
   }
 
   double getTotalRevenue() {
     return _invoices.fold(0.0, (sum, invoice) => sum + invoice.total);
   }
 
-  Map<String, int> getProductSalesCount() {
-    return DatabaseService.getProductSalesCount();
+  Future<Map<String, int>> getProductSalesCount() async {
+    return await FirestoreService.getProductSalesCount();
   }
 }
 

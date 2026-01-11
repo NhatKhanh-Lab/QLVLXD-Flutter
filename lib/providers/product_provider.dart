@@ -1,13 +1,21 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/product.dart';
-import '../services/db_service.dart';
-import '../services/firebase_service.dart';
+import '../services/firestore_service.dart';
 
+/// ProductProvider using Firestore - replaces Hive completely
+/// 
+/// **Key differences from Hive:**
+/// - Uses Firestore streams for real-time updates
+/// - Data automatically syncs across all devices
+/// - No need to manually sync - changes appear instantly
+/// - Works offline with Firestore's offline persistence
 class ProductProvider with ChangeNotifier {
   List<Product> _products = [];
   String _selectedCategory = 'Tất cả';
   String _searchQuery = '';
   bool _isLoading = false;
+  StreamSubscription<List<Product>>? _productsSubscription;
 
   List<Product> get products {
     var filtered = _products;
@@ -48,46 +56,41 @@ class ProductProvider with ChangeNotifier {
   }
 
   ProductProvider() {
-    loadProducts();
+    _initProductsStream();
   }
 
-  Future<void> loadProducts({bool syncFromFirebase = true}) async {
+  /// Initialize Firestore stream - automatically updates when data changes
+  void _initProductsStream() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      // Fetch from Firebase first (if enabled)
-      if (syncFromFirebase) {
-        try {
-          final firebaseProducts = await FirebaseService.fetchProductsFromFirebase();
-          if (firebaseProducts.isNotEmpty) {
-            debugPrint('Fetched ${firebaseProducts.length} products from Firebase');
-            // Merge Firebase data into local database
-            for (final product in firebaseProducts) {
-              await DatabaseService.addProduct(product);
-            }
-          }
-        } catch (e) {
-          debugPrint('Firebase sync skipped (app continues with local data): $e');
-        }
-      }
+    // Listen to Firestore stream - automatically updates UI when data changes
+    _productsSubscription = FirestoreService.getAllProducts().listen(
+      (products) {
+        _products = products;
+        _products.sort((a, b) => a.name.compareTo(b.name));
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error loading products from Firestore: $error');
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
 
-      // Load from local database (includes synced Firebase data)
-      _products = DatabaseService.getAllProducts();
-      _products.sort((a, b) => a.name.compareTo(b.name));
-    } catch (e) {
-      debugPrint('Error loading products: $e');
-    }
-
-    _isLoading = false;
-    notifyListeners();
+  @override
+  void dispose() {
+    _productsSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> addProduct(Product product) async {
     try {
-      await DatabaseService.addProduct(product);
-      await FirebaseService.syncProductToFirebase(product);
-      await loadProducts();
+      // Add to Firestore - automatically syncs to all devices
+      await FirestoreService.addProduct(product);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error adding product: $e');
       rethrow;
@@ -96,9 +99,9 @@ class ProductProvider with ChangeNotifier {
 
   Future<void> updateProduct(Product product) async {
     try {
-      await DatabaseService.updateProduct(product);
-      await FirebaseService.syncProductToFirebase(product);
-      await loadProducts();
+      // Update in Firestore - automatically syncs to all devices
+      await FirestoreService.updateProduct(product);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error updating product: $e');
       rethrow;
@@ -107,11 +110,9 @@ class ProductProvider with ChangeNotifier {
 
   Future<void> deleteProduct(String productId) async {
     try {
-      await DatabaseService.deleteProduct(productId);
-      await FirebaseService.deleteProductFromFirebase(productId);
-      // Xóa sản phẩm khỏi list hiện tại và thông báo thay đổi
-      _products.removeWhere((p) => p.id == productId);
-      notifyListeners();
+      // Delete from Firestore - automatically syncs to all devices
+      await FirestoreService.deleteProduct(productId);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error deleting product: $e');
       rethrow;
@@ -136,14 +137,14 @@ class ProductProvider with ChangeNotifier {
     }
   }
 
-  void updateProductQuantity(String productId, int quantityChange) {
+  Future<void> updateProductQuantity(String productId, int quantityChange) async {
     final product = getProductById(productId);
     if (product != null) {
       final updatedProduct = product.copyWith(
         quantity: product.quantity + quantityChange,
         updatedAt: DateTime.now(),
       );
-      updateProduct(updatedProduct);
+      await updateProduct(updatedProduct);
     }
   }
 }

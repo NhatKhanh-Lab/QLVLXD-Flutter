@@ -1,24 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'services/db_service.dart';
-import 'services/firebase_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'providers/auth_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/invoice_provider.dart';
 import 'providers/supplier_provider.dart';
 import 'providers/customer_provider.dart';
 import 'providers/purchase_order_provider.dart';
+import 'services/firebase_auth_service.dart';
+import 'services/firebase_crashlytics_service.dart';
+import 'services/firebase_messaging_service.dart';
+import 'services/firebase_remote_config_service.dart';
 import 'shell/app_shell.dart';
+import 'screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Hive database
-  await DatabaseService.init();
+  // Initialize Firebase - REQUIRED for all Firebase services
+  try {
+    // Initialize Firebase with options from firebase_options.dart
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    debugPrint('Firebase initialized successfully');
 
-  // Initialize Firebase (uncomment sau khi đã setup Firebase)
-  // Xem hướng dẫn trong lib/examples/firebase_usage_guide.dart
-  await FirebaseService.init();
+    // Initialize Crashlytics (catch crashes)
+    FirebaseCrashlyticsService.initialize();
+
+    // Initialize Remote Config (app settings from cloud)
+    await FirebaseRemoteConfigService.initialize();
+
+    // Initialize FCM (push notifications)
+    await FirebaseMessagingService.initialize();
+
+    // Initialize default admin user if not exists
+    await FirebaseAuthService.initializeDefaultAdmin();
+  } catch (e) {
+    debugPrint('Firebase initialization error: $e');
+    debugPrint('App will continue but Firebase features may not work');
+    debugPrint('Please configure Firebase: flutterfire configure');
+  }
 
   runApp(const MyApp());
 }
@@ -30,6 +53,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // Auth provider must be first - other providers depend on it
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ProductProvider()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider()),
         ChangeNotifierProvider(create: (_) => SupplierProvider()),
@@ -37,7 +62,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => PurchaseOrderProvider()),
       ],
       child: MaterialApp(
-        title: 'Quản lý Vật liệu Xây dựng',
+        title: 'GKNM PROJECT - QLVLXD',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
@@ -120,7 +145,16 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const AppShell(),
+        home: Consumer<AuthProvider>(
+          builder: (context, authProvider, _) {
+            // Show login screen if not authenticated
+            if (!authProvider.isAuthenticated) {
+              return const LoginScreen();
+            }
+            // Show main app if authenticated
+            return const AppShell();
+          },
+        ),
       ),
     );
   }

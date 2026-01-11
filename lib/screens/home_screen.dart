@@ -33,8 +33,8 @@ class HomeScreen extends StatelessWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await productProvider.loadProducts();
-          await invoiceProvider.loadInvoices();
+          // Data automatically updates via Firestore streams
+          // No need to manually reload
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -188,29 +188,35 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildFinancialSummary(BuildContext context, InvoiceProvider invoiceProvider) {
     final currencyFormat = NumberFormat.decimalPattern('vi_VN');
-                  return Card(
+    return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: Row(
           children: [
             Expanded(
-              child: _FinancialStat(
-                label: 'Doanh Thu Hôm Nay',
-                value: '${currencyFormat.format(invoiceProvider.getTodayRevenue())} VND',
-                color: _kSuccessColor,
-                        ),
-                      ),
+              child: FutureBuilder<double>(
+                future: invoiceProvider.getTodayRevenue(),
+                builder: (context, snapshot) {
+                  final todayRevenue = snapshot.data ?? 0.0;
+                  return _FinancialStat(
+                    label: 'Doanh Thu Hôm Nay',
+                    value: '${currencyFormat.format(todayRevenue)} VND',
+                    color: _kSuccessColor,
+                  );
+                },
+              ),
+            ),
             Container(width: 1, height: 40, color: Colors.grey[200]),
             Expanded(
               child: _FinancialStat(
                 label: 'Tổng Doanh Thu',
                 value: '${currencyFormat.format(invoiceProvider.getTotalRevenue())} VND',
                 color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
+      ),
     );
   }
 

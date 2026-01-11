@@ -1,37 +1,50 @@
 import 'package:flutter/foundation.dart';
+import 'dart:async';
 import '../models/customer.dart';
-import '../services/db_service.dart';
+import '../services/firestore_service.dart';
 
 class CustomerProvider with ChangeNotifier {
   List<Customer> _customers = [];
   bool _isLoading = false;
+  StreamSubscription<List<Customer>>? _customersSubscription;
 
   List<Customer> get customers => _customers;
   bool get isLoading => _isLoading;
 
   CustomerProvider() {
-    loadCustomers();
+    _loadCustomers();
   }
 
-  Future<void> loadCustomers() async {
+  void _loadCustomers() {
     _isLoading = true;
     notifyListeners();
 
-    try {
-      _customers = DatabaseService.getAllCustomers();
-      _customers.sort((a, b) => b.totalPurchases.compareTo(a.totalPurchases));
-    } catch (e) {
-      debugPrint('Error loading customers: $e');
-    }
+    final stream = FirestoreService.getAllCustomers();
 
-    _isLoading = false;
-    notifyListeners();
+    _customersSubscription = stream.listen(
+      (customers) {
+        _customers = customers;
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('Error loading customers from Firestore: $error');
+        _isLoading = false;
+        notifyListeners();
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _customersSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> addCustomer(Customer customer) async {
     try {
-      await DatabaseService.addCustomer(customer);
-      await loadCustomers();
+      await FirestoreService.addCustomer(customer);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error adding customer: $e');
       rethrow;
@@ -40,8 +53,8 @@ class CustomerProvider with ChangeNotifier {
 
   Future<void> updateCustomer(Customer customer) async {
     try {
-      await DatabaseService.updateCustomer(customer);
-      await loadCustomers();
+      await FirestoreService.updateCustomer(customer);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error updating customer: $e');
       rethrow;
@@ -50,8 +63,8 @@ class CustomerProvider with ChangeNotifier {
 
   Future<void> deleteCustomer(String customerId) async {
     try {
-      await DatabaseService.deleteCustomer(customerId);
-      await loadCustomers();
+      await FirestoreService.deleteCustomer(customerId);
+      // No need to reload - stream will automatically update
     } catch (e) {
       debugPrint('Error deleting customer: $e');
       rethrow;
