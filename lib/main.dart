@@ -8,7 +8,7 @@ import 'providers/invoice_provider.dart';
 import 'providers/supplier_provider.dart';
 import 'providers/customer_provider.dart';
 import 'providers/purchase_order_provider.dart';
-import 'screens/home_screen.dart';
+import 'shell/app_shell.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -120,7 +120,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const HomeScreen(),
+        home: const AppShell(),
       ),
     );
   }

@@ -51,11 +51,28 @@ class ProductProvider with ChangeNotifier {
     loadProducts();
   }
 
-  Future<void> loadProducts() async {
+  Future<void> loadProducts({bool syncFromFirebase = true}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
+      // Fetch from Firebase first (if enabled)
+      if (syncFromFirebase) {
+        try {
+          final firebaseProducts = await FirebaseService.fetchProductsFromFirebase();
+          if (firebaseProducts.isNotEmpty) {
+            debugPrint('Fetched ${firebaseProducts.length} products from Firebase');
+            // Merge Firebase data into local database
+            for (final product in firebaseProducts) {
+              await DatabaseService.addProduct(product);
+            }
+          }
+        } catch (e) {
+          debugPrint('Firebase sync skipped (app continues with local data): $e');
+        }
+      }
+
+      // Load from local database (includes synced Firebase data)
       _products = DatabaseService.getAllProducts();
       _products.sort((a, b) => a.name.compareTo(b.name));
     } catch (e) {
