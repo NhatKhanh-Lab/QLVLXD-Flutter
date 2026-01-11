@@ -18,11 +18,28 @@ class InvoiceProvider with ChangeNotifier {
     loadInvoices();
   }
 
-  Future<void> loadInvoices() async {
+  Future<void> loadInvoices({bool syncFromFirebase = true}) async {
     _isLoading = true;
     notifyListeners();
 
     try {
+      // Fetch from Firebase first (if enabled)
+      if (syncFromFirebase) {
+        try {
+          final firebaseInvoices = await FirebaseService.fetchInvoicesFromFirebase();
+          if (firebaseInvoices.isNotEmpty) {
+            debugPrint('Fetched ${firebaseInvoices.length} invoices from Firebase');
+            // Merge Firebase data into local database
+            for (final invoice in firebaseInvoices) {
+              await DatabaseService.addInvoice(invoice);
+            }
+          }
+        } catch (e) {
+          debugPrint('Firebase sync skipped (app continues with local data): $e');
+        }
+      }
+
+      // Load from local database (includes synced Firebase data)
       _invoices = DatabaseService.getAllInvoices();
       _invoices.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     } catch (e) {
