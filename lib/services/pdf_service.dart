@@ -1,512 +1,256 @@
-import 'dart:io';
+import 'package:emv_qr_builder/emv_qr_builder.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:intl/intl.dart';
+
 import '../models/invoice.dart';
 import '../models/user.dart' as app_user;
 import '../services/firebase_auth_service.dart';
 
 class PDFService {
-  // Professional color scheme - neutral and serious
-  static const PdfColor primaryColor = PdfColor.fromInt(0xFF212121); // Dark gray/black
-  static const PdfColor mediumGray = PdfColor.fromInt(0xFF757575);
-  static const PdfColor lightGray = PdfColor.fromInt(0xFFF5F5F5);
-  static const PdfColor borderColor = PdfColor.fromInt(0xFFE0E0E0);
-
-  // Cache fonts to avoid reloading
   static pw.Font? _regularFont;
   static pw.Font? _boldFont;
 
-  // Load font with Unicode support
-  static Future<void> _loadFonts({bool forceReload = false}) async {
-    if (!forceReload && _regularFont != null && _boldFont != null) return;
+  static Future<void> _loadFonts() async {
+    if (_regularFont != null && _boldFont != null) return;
 
     try {
-      // Try to load Roboto font from assets (if user added them)
-      try {
-        print('Attempting to load fonts from assets/fonts/...');
-        final regularData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
-        final boldData = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
-        
-        print('Font files found:');
-        print('  - Roboto-Regular.ttf: ${regularData.lengthInBytes} bytes');
-        print('  - Roboto-Bold.ttf: ${boldData.lengthInBytes} bytes');
-        
-        // Validate font data
-        if (regularData.lengthInBytes > 1000 && boldData.lengthInBytes > 1000) {
-          _regularFont = pw.Font.ttf(regularData);
-          _boldFont = pw.Font.ttf(boldData);
-          print('✓ Successfully loaded Roboto fonts from assets');
-          print('✓ Unicode/Vietnamese characters should display correctly');
-          return;
-        } else {
-          print('⚠ Font files are too small (may be corrupted)');
-        }
-      } catch (e) {
-        print('⚠ Could not load fonts from assets: $e');
-        print('⚠ Make sure:');
-        print('  1. Roboto-Regular.ttf and Roboto-Bold.ttf are in assets/fonts/');
-        print('  2. pubspec.yaml has assets/fonts/ in assets section');
-        print('  3. Run: flutter pub get && flutter clean && flutter run');
-      }
+      final regularData = await rootBundle.load('assets/fonts/Roboto-Regular.ttf');
+      final boldData = await rootBundle.load('assets/fonts/Roboto-Bold.ttf');
+      _regularFont = pw.Font.ttf(regularData);
+      _boldFont = pw.Font.ttf(boldData);
+    } catch (_) {
+      _regularFont = pw.Font.helvetica();
+      _boldFont = pw.Font.helveticaBold();
+    }
+  }
 
-      // Fallback: Use default fonts (may not support all Vietnamese characters)
-      // Note: Default fonts may have Unicode issues
-      _regularFont = pw.Font.courier();
-      _boldFont = pw.Font.courierBold();
-      print('⚠ Using default fonts (may have Unicode issues)');
-      print('⚠ To fix Unicode: Download Roboto fonts from https://fonts.google.com/specimen/Roboto');
-      print('⚠ Place Roboto-Regular.ttf and Roboto-Bold.ttf in assets/fonts/');
-      print('⚠ Then run: flutter pub get && flutter clean && flutter run');
-    } catch (e) {
-      print('Error loading fonts: $e');
-      // Ultimate fallback
-      _regularFont = pw.Font.courier();
-      _boldFont = pw.Font.courierBold();
+  static Future<app_user.User?> _loadEmployee(Invoice invoice) async {
+    if (invoice.createdBy == null || invoice.createdBy!.isEmpty) return null;
+    try {
+      return await FirebaseAuthService.getUserByUid(invoice.createdBy!);
+    } catch (_) {
+      return null;
     }
   }
 
   static Future<void> generateAndPrintInvoice(Invoice invoice) async {
-    // Load fonts with Unicode support
     await _loadFonts();
+    final employee = await _loadEmployee(invoice);
 
-    // Get employee information if available
-    app_user.User? employee;
-    if (invoice.createdBy != null && invoice.createdBy!.isNotEmpty) {
-      try {
-        employee = await FirebaseAuthService.getUserByUid(invoice.createdBy!);
-      } catch (e) {
-        print('Could not load employee info: $e');
-      }
-    }
-
-    final pdf = pw.Document();
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: _regularFont!,
+        bold: _boldFont!,
+      ),
+    );
 
     pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        theme: pw.ThemeData.withFont(
-          base: _regularFont ?? pw.Font.courier(),
-          bold: _boldFont ?? pw.Font.courierBold(),
-        ),
+      pw.Page(
+        pageFormat: PdfPageFormat.a4.copyWith(marginLeft: 30, marginRight: 30, marginTop: 20, marginBottom: 20),
         build: (pw.Context context) {
-          return _buildInvoiceContent(invoice, dateFormat, currencyFormat, employee);
+          return _buildModernInvoiceA4(invoice, employee);
         },
       ),
     );
 
-    await Printing.layoutPdf(
-      onLayout: (PdfPageFormat format) async => pdf.save(),
+    await Printing.sharePdf(
+      bytes: await pdf.save(),
+      filename: 'HoaDon_${invoice.invoiceNumber}.pdf',
     );
   }
 
-  // Helper function to build invoice content (reusable for both print and save)
-  static List<pw.Widget> _buildInvoiceContent(
-    Invoice invoice,
-    DateFormat dateFormat,
-    NumberFormat currencyFormat,
-    app_user.User? employee,
-  ) {
-    return [
-      // Professional Header - clean and minimal
-      pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
+  static pw.Widget _buildModernInvoiceA4(Invoice invoice, app_user.User? employee) {
+    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+    final currencyFormat = NumberFormat('#,##0', 'vi_VN');
+
+    final headerStyle = pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold);
+    final normalStyle = const pw.TextStyle(fontSize: 10);
+    final smallStyle = const pw.TextStyle(fontSize: 9, color: PdfColors.grey700);
+
+    final payQrPayload = _buildVietQrPayloadTpBank(
+      amount: invoice.total,
+      addInfo: invoice.invoiceNumber,
+    );
+    
+    final vatPercent = (invoice.subtotal > 0) ? (invoice.vat / invoice.subtotal * 100) : 0;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // Store Header
+        pw.Center(
+          child: pw.Column(
             children: [
-              pw.Text(
-                'HÓA ĐƠN BÁN HÀNG',
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                  color: primaryColor,
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Số: ${invoice.invoiceNumber}',
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  color: mediumGray,
-                ),
-              ),
+              pw.Text('GKNM', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 2),
+              pw.Text('266 Đội Cấn, Hà Nội', style: smallStyle),
             ],
-          ),
-          pw.Text(
-            dateFormat.format(invoice.createdAt),
-            style: pw.TextStyle(
-              fontSize: 11,
-              color: mediumGray,
-            ),
-          ),
-        ],
-      ),
-
-      pw.Divider(color: borderColor, height: 30),
-
-      // Customer and Employee Information - professional layout
-      pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          // Customer Information
-          if (invoice.customerName != null || invoice.customerPhone != null)
-            pw.Expanded(
-              child: pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                margin: const pw.EdgeInsets.only(bottom: 24, right: 8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: borderColor, width: 1),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'THÔNG TIN KHÁCH HÀNG',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primaryColor,
-                      ),
-                    ),
-                    pw.SizedBox(height: 10),
-                    if (invoice.customerName != null)
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.only(bottom: 6),
-                        child: pw.Text(
-                          'Tên: ${invoice.customerName}',
-                          style: pw.TextStyle(
-                            fontSize: 11,
-                            color: primaryColor,
-                          ),
-                        ),
-                      ),
-                    if (invoice.customerPhone != null)
-                      pw.Text(
-                        'SĐT: ${invoice.customerPhone}',
-                        style: pw.TextStyle(
-                          fontSize: 11,
-                          color: primaryColor,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          // Employee Information
-          if (employee != null)
-            pw.Expanded(
-              child: pw.Container(
-                padding: const pw.EdgeInsets.all(16),
-                margin: const pw.EdgeInsets.only(bottom: 24, left: 8),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: borderColor, width: 1),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text(
-                      'NHÂN VIÊN BÁN HÀNG',
-                      style: pw.TextStyle(
-                        fontSize: 12,
-                        fontWeight: pw.FontWeight.bold,
-                        color: primaryColor,
-                      ),
-                    ),
-                    pw.SizedBox(height: 10),
-                    pw.Text(
-                      'Tên: ${employee.fullName}',
-                      style: pw.TextStyle(
-                        fontSize: 11,
-                        color: primaryColor,
-                      ),
-                    ),
-                    if (employee.username != null)
-                      pw.Padding(
-                        padding: const pw.EdgeInsets.only(top: 4),
-                        child: pw.Text(
-                          'Mã NV: ${employee.username}',
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            color: mediumGray,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-
-      // Professional Items Table
-      pw.Table(
-        border: pw.TableBorder.all(color: borderColor, width: 1),
-        children: [
-          // Header row
-          pw.TableRow(
-            decoration: const pw.BoxDecoration(color: lightGray),
-            children: [
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(10),
-                child: pw.Text(
-                  'STT',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 10,
-                    color: primaryColor,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(10),
-                child: pw.Text(
-                  'TÊN SẢN PHẨM',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 10,
-                    color: primaryColor,
-                  ),
-                ),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(10),
-                child: pw.Text(
-                  'ĐƠN GIÁ',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 10,
-                    color: primaryColor,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(10),
-                child: pw.Text(
-                  'SL',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 10,
-                    color: primaryColor,
-                  ),
-                  textAlign: pw.TextAlign.center,
-                ),
-              ),
-              pw.Padding(
-                padding: const pw.EdgeInsets.all(10),
-                child: pw.Text(
-                  'THÀNH TIỀN',
-                  style: pw.TextStyle(
-                    fontWeight: pw.FontWeight.bold,
-                    fontSize: 10,
-                    color: primaryColor,
-                  ),
-                  textAlign: pw.TextAlign.right,
-                ),
-              ),
-            ],
-          ),
-          // Items rows
-          ...invoice.items.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            return pw.TableRow(
-              children: [
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(10),
-                  child: pw.Text(
-                    '${index + 1}',
-                    style: pw.TextStyle(fontSize: 10, color: primaryColor),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(10),
-                  child: pw.Text(
-                    item.productName,
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      color: primaryColor,
-                    ),
-                  ),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(10),
-                  child: pw.Text(
-                    '${currencyFormat.format(item.unitPrice)} đ',
-                    style: pw.TextStyle(fontSize: 10, color: primaryColor),
-                    textAlign: pw.TextAlign.right,
-                  ),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(10),
-                  child: pw.Text(
-                    '${item.quantity}',
-                    style: pw.TextStyle(fontSize: 10, color: primaryColor),
-                    textAlign: pw.TextAlign.center,
-                  ),
-                ),
-                pw.Padding(
-                  padding: const pw.EdgeInsets.all(10),
-                  child: pw.Text(
-                    '${currencyFormat.format(item.total)} đ',
-                    style: pw.TextStyle(
-                      fontSize: 10,
-                      fontWeight: pw.FontWeight.bold,
-                      color: primaryColor,
-                    ),
-                    textAlign: pw.TextAlign.right,
-                  ),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-
-      pw.SizedBox(height: 20),
-
-      // Notes - simple and clean
-      if (invoice.notes != null && invoice.notes!.isNotEmpty)
-        pw.Container(
-          padding: const pw.EdgeInsets.all(12),
-          margin: const pw.EdgeInsets.only(bottom: 20),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: borderColor, width: 1),
-          ),
-          child: pw.Text(
-            'Ghi chú: ${invoice.notes}',
-            style: pw.TextStyle(fontSize: 10, color: mediumGray),
           ),
         ),
+        pw.SizedBox(height: 20),
 
-      pw.SizedBox(height: 20),
+        // Invoice Title and Info
+        pw.Center(
+          child: pw.Text(
+            'HÓA ĐƠN BÁN HÀNG',
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.SizedBox(height: 5),
+        pw.Center(
+          child: pw.Text(
+            'Số HĐ: ${invoice.invoiceNumber} - Ngày: ${dateFormat.format(invoice.createdAt)}',
+            style: smallStyle,
+          ),
+        ),
+        pw.SizedBox(height: 20),
 
-      // Professional Totals Section
-      pw.Align(
-        alignment: pw.Alignment.centerRight,
-        child: pw.Container(
-          width: 250,
-          padding: const pw.EdgeInsets.all(16),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: borderColor, width: 1),
+        // Customer Info
+        pw.Container(
+          padding: const pw.EdgeInsets.only(bottom: 10),
+          decoration: const pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(color: PdfColors.black, width: 1)),
           ),
           child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(
-                    'Tạm tính:',
-                    style: pw.TextStyle(fontSize: 11, color: primaryColor),
-                  ),
-                  pw.Text(
-                    '${currencyFormat.format(invoice.subtotal)} đ',
-                    style: pw.TextStyle(fontSize: 11, color: primaryColor),
-                  ),
+                  pw.SizedBox(width: 50, child: pw.Text('Khách:', style: normalStyle)),
+                  pw.Text(invoice.customerName ?? 'Khách lẻ', style: headerStyle),
                 ],
               ),
-              pw.SizedBox(height: 6),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'VAT (10%):',
-                    style: pw.TextStyle(fontSize: 11, color: primaryColor),
-                  ),
-                  pw.Text(
-                    '${currencyFormat.format(invoice.vat)} đ',
-                    style: pw.TextStyle(fontSize: 11, color: primaryColor),
-                  ),
-                ],
-              ),
-              pw.Divider(color: borderColor, height: 16),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'TỔNG CỘNG:',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 13,
-                      color: primaryColor,
-                    ),
-                  ),
-                  pw.Text(
-                    '${currencyFormat.format(invoice.total)} đ',
-                    style: pw.TextStyle(
-                      fontWeight: pw.FontWeight.bold,
-                      fontSize: 13,
-                      color: primaryColor,
-                    ),
-                  ),
-                ],
-              ),
+              pw.SizedBox(height: 4),
+              if (invoice.customerPhone != null && invoice.customerPhone!.isNotEmpty)
+                pw.Row(
+                  children: [
+                    pw.SizedBox(width: 50, child: pw.Text('SĐT:', style: normalStyle)),
+                    pw.Text(invoice.customerPhone!, style: normalStyle),
+                  ],
+                ),
             ],
           ),
         ),
-      ),
+        pw.SizedBox(height: 10),
 
-      pw.SizedBox(height: 40),
+        // Items Table
+        pw.Table(
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: 1),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(6),
+            1: const pw.FlexColumnWidth(1.5),
+            2: const pw.FlexColumnWidth(2.5),
+            3: const pw.FlexColumnWidth(3),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+              children: [
+                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Tên hàng', style: headerStyle)),
+                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('SL', style: headerStyle, textAlign: pw.TextAlign.right)),
+                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('ĐG', style: headerStyle, textAlign: pw.TextAlign.right)),
+                pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text('Thành tiền', style: headerStyle, textAlign: pw.TextAlign.right)),
+              ],
+            ),
+            ...invoice.items.map((item) {
+              return pw.TableRow(
+                children: [
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(item.productName, style: normalStyle)),
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(item.quantity.toString(), style: normalStyle, textAlign: pw.TextAlign.right)),
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.unitPrice), style: normalStyle, textAlign: pw.TextAlign.right)),
+                  pw.Padding(padding: const pw.EdgeInsets.all(6), child: pw.Text(currencyFormat.format(item.total), style: normalStyle, textAlign: pw.TextAlign.right)),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+        pw.SizedBox(height: 20),
 
-      // Professional Footer
-      pw.Align(
-        alignment: pw.Alignment.center,
-        child: pw.Text(
-          'Cảm ơn quý khách đã sử dụng dịch vụ!',
-          style: pw.TextStyle(
-            fontSize: 10,
-            color: mediumGray,
-            fontStyle: pw.FontStyle.italic,
+        // Totals
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.end,
+          children: [
+            pw.SizedBox(
+              width: 280,
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  _buildTotalRow('Tiền hàng', currencyFormat.format(invoice.subtotal), normalStyle),
+                  _buildTotalRow('VAT (${vatPercent.toStringAsFixed(0)}%)', currencyFormat.format(invoice.vat), normalStyle),
+                  pw.SizedBox(height: 5),
+                  _buildTotalRow('Tổng thanh toán', currencyFormat.format(invoice.total), pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 10),
+        pw.Container(height: 1, color: PdfColors.black),
+        pw.SizedBox(height: 10),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.end,
+          children: [
+            pw.SizedBox(
+              width: 280,
+              child: _buildTotalRow('Còn phải thu', currencyFormat.format(invoice.total), normalStyle),
+            ),
+          ],
+        ),
+        pw.Spacer(),
+
+        // QR Code and Footer
+        pw.Center(
+          child: pw.Column(
+            children: [
+              pw.Text('Vui lòng kiểm tra kỹ lại nội dung trước khi thanh toán!', style: headerStyle),
+              pw.SizedBox(height: 10),
+              pw.BarcodeWidget(
+                barcode: pw.Barcode.qrCode(),
+                data: payQrPayload,
+                width: 140,
+                height: 140,
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text('Cảm ơn quý khách đã sử dụng dịch vụ!', style: normalStyle),
+            ],
           ),
         ),
-      ),
-    ];
+        pw.SizedBox(height: 10),
+      ],
+    );
   }
 
-  static Future<File> saveInvoiceToFile(Invoice invoice, String filePath) async {
-    // Load fonts with Unicode support
-    await _loadFonts();
-
-    // Get employee information if available
-    app_user.User? employee;
-    if (invoice.createdBy != null && invoice.createdBy!.isNotEmpty) {
-      try {
-        employee = await FirebaseAuthService.getUserByUid(invoice.createdBy!);
-      } catch (e) {
-        print('Could not load employee info: $e');
-      }
-    }
-
-    final pdf = pw.Document();
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-    final currencyFormat = NumberFormat.decimalPattern('vi_VN');
-
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(40),
-        theme: pw.ThemeData.withFont(
-          base: _regularFont ?? pw.Font.courier(),
-          bold: _boldFont ?? pw.Font.courierBold(),
-        ),
-        build: (pw.Context context) {
-          return _buildInvoiceContent(invoice, dateFormat, currencyFormat, employee);
-        },
+  static pw.Widget _buildTotalRow(String label, String value, pw.TextStyle style) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(label, style: style),
+          pw.Text(value, style: style),
+        ],
       ),
     );
+  }
 
-    final file = File(filePath);
-    await file.writeAsBytes(await pdf.save());
-    return file;
+  static String _buildVietQrPayloadTpBank({
+    required double amount,
+    required String addInfo,
+  }) {
+    try {
+      final emvData = VietQrFactory.createPersonal(
+        bankBin: '970423',
+        accountNumber: '68610042009',
+        amount: amount.toStringAsFixed(0),
+        description: addInfo,
+        accountName: 'NGUYEN HOANG GIANG',
+      );
+      return EmvBuilder.build(emvData);
+    } catch (_) {
+      return 'TPBANK|68610042009|NGUYEN HOANG GIANG|${amount.toStringAsFixed(0)}|$addInfo';
+    }
   }
 }

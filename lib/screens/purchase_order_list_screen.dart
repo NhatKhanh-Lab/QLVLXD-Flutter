@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../providers/purchase_order_provider.dart';
 import '../providers/supplier_provider.dart';
-import '../providers/product_provider.dart';
 import '../models/purchase_order.dart';
 import 'create_purchase_order_screen.dart';
 

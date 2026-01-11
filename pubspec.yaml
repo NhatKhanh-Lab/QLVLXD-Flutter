@@ -53,6 +53,8 @@ dependencies:
   uuid: ^4.2.1
   shared_preferences: ^2.2.2
   google_fonts: ^6.1.0
+  emv_qr_builder: 1.0.2
+  qr: 3.0.2
 
 dev_dependencies:
   flutter_test:
@@ -82,11 +84,7 @@ flutter:
 
   # Assets
   assets:
-    - assets/images/
-    # Fonts will be loaded dynamically if available in assets/fonts/
-    # To add fonts: Download Roboto-Regular.ttf and Roboto-Bold.ttf
-    # Place them in assets/fonts/ and uncomment the fonts section below
-    # - assets/fonts/
+    - assets/fonts/
 
   # Fonts for PDF Unicode support (uncomment when fonts are added)
   # fonts:
