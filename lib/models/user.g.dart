@@ -1,60 +1,60 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'invoice.dart';
+part of 'user.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class InvoiceAdapter extends TypeAdapter<Invoice> {
+class UserAdapter extends TypeAdapter<User> {
   @override
-  final int typeId = 2;
+  final int typeId = 6;
 
   @override
-  Invoice read(BinaryReader reader) {
+  User read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return Invoice(
+    return User(
       id: fields[0] as String,
-      invoiceNumber: fields[1] as String,
-      items: (fields[2] as List).cast<InvoiceItem>(),
-      subtotal: fields[3] as double,
-      vat: fields[4] as double,
-      total: fields[5] as double,
-      customerName: fields[6] as String?,
-      customerPhone: fields[7] as String?,
+      username: fields[1] as String,
+      password: fields[2] as String,
+      fullName: fields[3] as String,
+      email: fields[4] as String,
+      phone: fields[5] as String?,
+      role: fields[6] as UserRole,
+      isActive: fields[7] as bool,
       createdAt: fields[8] as DateTime,
-      notes: fields[9] as String?,
+      updatedAt: fields[9] as DateTime,
       createdBy: fields[10] as String?,
     );
   }
 
   @override
-  void write(BinaryWriter writer, Invoice obj) {
+  void write(BinaryWriter writer, User obj) {
     writer
       ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.invoiceNumber)
+      ..write(obj.username)
       ..writeByte(2)
-      ..write(obj.items)
+      ..write(obj.password)
       ..writeByte(3)
-      ..write(obj.subtotal)
+      ..write(obj.fullName)
       ..writeByte(4)
-      ..write(obj.vat)
+      ..write(obj.email)
       ..writeByte(5)
-      ..write(obj.total)
+      ..write(obj.phone)
       ..writeByte(6)
-      ..write(obj.customerName)
+      ..write(obj.role)
       ..writeByte(7)
-      ..write(obj.customerPhone)
+      ..write(obj.isActive)
       ..writeByte(8)
       ..write(obj.createdAt)
       ..writeByte(9)
-      ..write(obj.notes)
+      ..write(obj.updatedAt)
       ..writeByte(10)
       ..write(obj.createdBy);
   }
@@ -65,7 +65,7 @@ class InvoiceAdapter extends TypeAdapter<Invoice> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is InvoiceAdapter &&
+      other is UserAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

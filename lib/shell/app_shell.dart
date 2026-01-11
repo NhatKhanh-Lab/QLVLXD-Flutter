@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../navigation/nav_items.dart';
+import '../providers/auth_provider.dart';
 
 /// Root shell for the app that hosts the bottom navigation bar and main tabs.
 class AppShell extends StatefulWidget {
@@ -14,17 +16,82 @@ class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
   final List<int> _tabHistory = [];
 
-  late final List<Widget> _pages;
+  late List<NavItem> _navItems;
+  late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _updateNavItems();
+  }
+
+  void _updateNavItems() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final isAdmin = authProvider.isAdmin;
+
+    // Filter nav items based on user role
+    _navItems = AppNavItems.items.where((item) => !item.adminOnly || isAdmin).toList();
+
     // Use PageStorageKeys so each tab preserves its own scroll/form state.
     _pages = List<Widget>.generate(
-      AppNavItems.items.length,
+      _navItems.length,
       (index) => KeyedSubtree(
         key: PageStorageKey<String>('tab_$index'),
-        child: AppNavItems.items[index].page,
+        child: _navItems[index].pageBuilder(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Rebuild nav items when auth state changes (user role might change)
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, _) {
+        // Update nav items if user role changed
+        final isAdmin = authProvider.isAdmin;
+        final newNavItems = AppNavItems.items.where((item) => !item.adminOnly || isAdmin).toList();
+        
+        // Rebuild pages if nav items changed
+        if (newNavItems.length != _navItems.length) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() {
+              _navItems = newNavItems;
+              _pages = List<Widget>.generate(
+                _navItems.length,
+                (index) => KeyedSubtree(
+                  key: PageStorageKey<String>('tab_$index'),
+                  child: _navItems[index].pageBuilder(),
+                ),
+              );
+              // Reset to first tab if current index is out of bounds
+              if (_currentIndex >= _navItems.length) {
+                _currentIndex = 0;
+              }
+            });
+          });
+        }
+
+        return _buildScaffold(context);
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: colorScheme.background,
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: IndexedStack(
+            index: _currentIndex,
+            children: _pages,
+          ),
+        ),
+        bottomNavigationBar: _buildBottomBar(context),
       ),
     );
   }
@@ -48,27 +115,6 @@ class _AppShellState extends State<AppShell> {
     }
     // Let system handle back (will close the app when on root).
     return true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return WillPopScope(
-      onWillPop: _onWillPop,
-      child: Scaffold(
-        backgroundColor: colorScheme.background,
-        body: SafeArea(
-          top: true,
-          bottom: false,
-          child: IndexedStack(
-            index: _currentIndex,
-            children: _pages,
-          ),
-        ),
-        bottomNavigationBar: _buildBottomBar(context),
-      ),
-    );
   }
 
   Widget _buildBottomBar(BuildContext context) {
@@ -111,7 +157,7 @@ class _AppShellState extends State<AppShell> {
               ),
               iconSize: 24,
               items: [
-                for (final item in AppNavItems.items)
+                for (final item in _navItems)
                   BottomNavigationBarItem(
                     icon: Icon(item.icon),
                     label: item.label,
